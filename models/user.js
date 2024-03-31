@@ -16,13 +16,14 @@ module.exports = (sequelize, DataTypes) => {
       name: DataTypes.STRING,
       picture: DataTypes.STRING,
       email: DataTypes.STRING,
+      username: DataTypes.STRING,
       phone: DataTypes.STRING,
       password: DataTypes.STRING,
       role: DataTypes.INTEGER,
       created_by: DataTypes.INTEGER,
       updated_by: DataTypes.INTEGER,
       created_date: DataTypes.BIGINT,
-      updated_date: DataTypes.BIGINT
+      updated_date: DataTypes.BIGINT,
     },
     {
       sequelize,

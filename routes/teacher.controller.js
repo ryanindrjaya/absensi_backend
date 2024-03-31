@@ -1,12 +1,6 @@
 const Joi = require("joi");
 const response = require("../response");
-const {
-  teacher,
-  subject,
-  classes,
-  teacher_subject,
-  user,
-} = require("../models");
+const { teacher, subject, classes, teacher_subject, user } = require("../models");
 const bcrypt = require("bcryptjs");
 const { Op } = require("sequelize");
 
@@ -21,9 +15,11 @@ exports.newTeacher = async (req, res) => {
     fk_subjects: Joi.array().items(Joi.number()).required().messages({
       "any.required": `"Mata pelajaran" tidak boleh dikosongi`,
     }),
-    email: Joi.string().email().required().messages({
-      "any.required": `"email" tidak boleh dikosongi`,
+    email: Joi.string().optional().allow("").email().messages({
       "string.email": `"email" harus dalam format yang valid`,
+    }),
+    username: Joi.string().required().messages({
+      "any.required": `"username" tidak boleh dikosongi`,
     }),
     password: Joi.string().min(6).required().messages({
       "any.required": `"password" tidak boleh dikosongi`,
@@ -37,23 +33,26 @@ exports.newTeacher = async (req, res) => {
   const { error } = schema.validate(req.body);
   if (error) return response.errorParams(error.message, res);
 
-  const { name, fk_class, fk_subjects, email, password, nik } = req.body;
+  const { name, fk_class, fk_subjects, email, password, nik, username } = req.body;
 
   try {
     const existingTeacher = await teacher.findOne({ where: { nik } });
     if (existingTeacher) {
-      return response.errorParams(
-        `NIK '${nik}' sudah terdaftar. Harap gunakan NIK yang berbeda.`,
-        res
-      );
+      return response.errorParams(`NIK '${nik}' sudah terdaftar. Harap gunakan NIK yang berbeda.`, res);
+    }
+
+    const existingUsername = await user.findOne({ where: { username } });
+    if (existingUsername) {
+      return response.errorParams(`Username '${username}' sudah terdaftar. Harap gunakan username yang berbeda.`, res);
     }
 
     let newUser;
-    if (email && password) {
+    if (username && password) {
       const salt = bcrypt.genSaltSync(10);
       const hash = bcrypt.hashSync(password, salt);
       newUser = await user.create({
         name: name,
+        username: username,
         email: email,
         password: hash,
         role: 2,
@@ -115,10 +114,7 @@ exports.editTeacher = async (req, res) => {
   try {
     const existingTeacher = await teacher.findByPk(teacherId);
     if (!existingTeacher) {
-      return response.errorParams(
-        `Pengajar dengan ID "${teacherId}" tidak ditemukan`,
-        res
-      );
+      return response.errorParams(`Pengajar dengan ID "${teacherId}" tidak ditemukan`, res);
     }
 
     const teacherWithSameNIK = await teacher.findOne({
@@ -155,11 +151,7 @@ exports.editTeacher = async (req, res) => {
       })
     );
 
-    response.successWithCustomMsg(
-      `Berhasil mengedit pengajar`,
-      existingTeacher,
-      res
-    );
+    response.successWithCustomMsg(`Berhasil mengedit pengajar`, existingTeacher, res);
   } catch (error) {
     console.error(error);
     response.internalServerError(error, res);
@@ -229,9 +221,7 @@ exports.getTeacher = async (req, res) => {
         });
       }
       if (teacher["subjects.subject_name"] !== null) {
-        teacherMap
-          .get(pk_teacher)
-          .subjects.push(teacher["subjects.subject_name"]);
+        teacherMap.get(pk_teacher).subjects.push(teacher["subjects.subject_name"]);
       }
     });
 
@@ -281,9 +271,7 @@ exports.getTeacherByUserId = async (req, res) => {
         });
       }
       if (teacher["subjects.subject_name"] !== null) {
-        teacherMap
-          .get(pk_teacher)
-          .subjects.push(teacher["subjects.subject_name"]);
+        teacherMap.get(pk_teacher).subjects.push(teacher["subjects.subject_name"]);
       }
     });
 

@@ -36,10 +36,7 @@ const createUser = async (req, res) => {
       // check not same email
       console.log(dat);
       if (dat) {
-        return response.successWithErrorMsg(
-          "Email sudah digunakan pada pengguna lain",
-          res
-        );
+        return response.successWithErrorMsg("Email sudah digunakan pada pengguna lain", res);
       } else {
         // Email tidak sama
         await user
@@ -77,7 +74,7 @@ const createUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
   const schema = Joi.object({
-    email: Joi.string().min(3).max(200).required(),
+    username: Joi.string().min(3).max(200).required(),
     password: Joi.string().min(3).max(200).required(),
   });
   const { error } = schema.validate(req.body);
@@ -87,13 +84,12 @@ const loginUser = async (req, res) => {
       message: error.message,
     });
   const qslct =
-    "SELECT * FROM users LEFT JOIN user_roles ON user_roles.role_id=users.role WHERE users.email=:email";
-  console.log(req.body.emai);
+    "SELECT * FROM users LEFT JOIN user_roles ON user_roles.role_id=users.role WHERE users.username=:username";
   //#region find user
   await sequelizeConf
     .query(qslct, {
       replacements: {
-        email: req.body.email,
+        username: req.body.username,
       },
       plain: false,
       raw: true,
@@ -105,10 +101,7 @@ const loginUser = async (req, res) => {
       console.log(resultt);
 
       if (!data) {
-        return response.notFound(
-          "Email yang anda masukkan salah / tidak ditemukan.",
-          res
-        );
+        return response.notFound("Username yang anda masukkan salah / tidak ditemukan.", res);
       }
 
       //VALID Password
@@ -125,6 +118,7 @@ const loginUser = async (req, res) => {
         {
           id: data.id,
           name: data.name,
+          username: data.username,
           email: data.email,
           picture: data.picture,
           phone: data.phone,
@@ -141,6 +135,7 @@ const loginUser = async (req, res) => {
         .create({
           id_user: data.id,
           access_token: token,
+          username: data.username,
           ip_address: ip.address(),
           last_time: Date.now(),
           created_date: Date.now(),
@@ -278,16 +273,9 @@ const updatepassworddata = async (req, res) => {
           const salt = await bcrypt.genSalt(10);
           const pwd = await bcrypt.hash(req.body.newpass, salt);
           await user
-            .update(
-              { password: pwd, updated_by: req.auth.id },
-              { where: { id: data.id } }
-            )
+            .update({ password: pwd, updated_by: req.auth.id }, { where: { id: data.id } })
             .then(() => {
-              response.successWithCustomMsg(
-                `Password Berhasil diperbarui.`,
-                "success",
-                res
-              );
+              response.successWithCustomMsg(`Password Berhasil diperbarui.`, "success", res);
             })
             .catch((error) => response.internalServerError(error, res));
         }
@@ -328,11 +316,7 @@ const updateuserinformationdata = async (req, res) => {
       }
     )
     .then(() => {
-      response.successWithCustomMsg(
-        `Informasi data Berhasil diperbarui.`,
-        "success",
-        res
-      );
+      response.successWithCustomMsg(`Informasi data Berhasil diperbarui.`, "success", res);
     })
     .catch((error) => response.internalServerError(error, res));
 };
