@@ -1,6 +1,6 @@
 const Joi = require("joi");
 const response = require("../response");
-const { lesson_schedule, teacher, classes, subject } = require("../models");
+const { lesson_schedule, teacher, classes, subject, attendance } = require("../models");
 const { formater } = require("../config/formatter");
 
 exports.createLessonSchedule = async (req, res) => {
@@ -238,91 +238,122 @@ exports.getLessonSchedules = async (req, res) => {
 };
 
 exports.getLessonSchedulesByUserId = async (req, res) => {
+  function getStartOfDayUnixTimestamp() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today.getTime();
+  }
+
+  function getEndOfDayUnixTimestamp() {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    return today.getTime();
+  }
+
   const loggedInUserId = req.auth.id;
-  await teacher
-    .findOne({
+  try {
+    const teacherData = await teacher.findOne({
       where: { fk_user: loggedInUserId },
       attributes: ["pk_teacher"],
-    })
-    .then((teacherData) => {
-      if (!teacherData) {
-        return response.notFound("Teacher not found for the logged-in user", res);
-      }
-      const teacherId = teacherData.pk_teacher;
-      lesson_schedule
-        .findAll({
-          where: { fk_teacher: teacherId },
-          order: [["created_date", "DESC"]],
-          include: [
-            {
-              model: classes,
-              as: "class",
-              // attributes: ['class_name'],
-            },
-            {
-              model: teacher,
-              as: "teacher",
-              // attributes: ['name', 'fk_user'],
-            },
-            {
-              model: subject,
-              as: "subject",
-              // attributes: ['subject_name'],
-            },
-          ],
-          raw: true,
-        })
-        .then((results) => {
-          const transformedResults = results.map((result) => {
-            const startDate = new Date(parseInt(result.lesson_schedule_start_hour));
-            const endDate = new Date(parseInt(result.lesson_schedule_end_hour));
-
-            const startHours = startDate.getHours().toString().padStart(2, "0");
-            const startMinutes = startDate.getMinutes().toString().padStart(2, "0");
-
-            const endHours = endDate.getHours().toString().padStart(2, "0");
-            const endMinutes = endDate.getMinutes().toString().padStart(2, "0");
-
-            const startTimeFormatted = `${startHours}:${startMinutes}`;
-            const endTimeFormatted = `${endHours}:${endMinutes}`;
-
-            const lessonStart = startDate.getHours() * 60 + startDate.getMinutes();
-            const lessonEnd = endDate.getHours() * 60 + endDate.getMinutes();
-            const lessonDurationMinutes = lessonEnd - lessonStart;
-
-            const isAlreadyLoggedIn = result["teacher.fk_user"] === loggedInUserId;
-
-            return {
-              id: result.pk_lesson_schedule,
-              lessonName: result["subject.subject_name"],
-              lessonTime: `${formater.convertIndexToDayName(
-                result.lesson_schedule_days
-              )}, ${startTimeFormatted} - ${endTimeFormatted}`,
-              lessonDurationMinutes: lessonDurationMinutes,
-              lessonId: result.pk_lesson_schedule,
-              class: result["class.class_name"],
-              classId: result["class.pk_class"],
-              teacherName: result["teacher.name"],
-              teacherId: result["teacher.pk_teacher"],
-              isAlreadyLoggedIn: isAlreadyLoggedIn,
-            };
-          });
-          // const transformedResults = results.map(result => ({
-          //     lessonName: result['subject.subject_name'],
-          //     lessonTime: result.lesson_schedule,
-          //     lessonId: result.pk_lesson_schedule,
-          //     class: result['class.class_name'],
-          //     classId: result['class.pk_class'],
-          //     teacherName: result['teacher.name'],
-          //     teacherId: result['teacher.pk_teacher']
-          // }));
-          response.success(transformedResults, res);
-        })
-        .catch((error) => {
-          return response.internalServerError(error, res);
-        });
-    })
-    .catch((error) => {
-      return response.internalServerError(error, res);
     });
+
+    if (!teacherData) {
+      return response.notFound("Teacher not found for the logged-in user", res);
+    }
+
+    const teacherId = teacherData.pk_teacher;
+    const results = await lesson_schedule.findAll({
+      where: { fk_teacher: teacherId },
+      order: [["created_date", "DESC"]],
+      include: [
+        {
+          model: classes,
+          as: "class",
+          // attributes: ['class_name'],
+        },
+        {
+          model: teacher,
+          as: "teacher",
+          // attributes: ['name', 'fk_user'],
+        },
+        {
+          model: subject,
+          as: "subject",
+          // attributes: ['subject_name'],
+        },
+      ],
+      raw: true,
+    });
+
+    const transformedResults = await Promise.all(
+      results.map(async (result) => {
+        const startDate = new Date(parseInt(result.lesson_schedule_start_hour));
+        const endDate = new Date(parseInt(result.lesson_schedule_end_hour));
+
+        const startHours = startDate.getHours().toString().padStart(2, "0");
+        const startMinutes = startDate.getMinutes().toString().padStart(2, "0");
+
+        const endHours = endDate.getHours().toString().padStart(2, "0");
+        const endMinutes = endDate.getMinutes().toString().padStart(2, "0");
+
+        const startTimeFormatted = `${startHours}:${startMinutes}`;
+        const endTimeFormatted = `${endHours}:${endMinutes}`;
+
+        const lessonStart = startDate.getHours() * 60 + startDate.getMinutes();
+        const lessonEnd = endDate.getHours() * 60 + endDate.getMinutes();
+        const lessonDurationMinutes = lessonEnd - lessonStart;
+
+        const isAlreadyLoggedIn = result["teacher.fk_user"] === loggedInUserId;
+
+        const attendanceData = await attendance.findAll({
+          where: {
+            fk_teacher: teacherId,
+            fk_lesson: result.pk_lesson_schedule,
+          },
+          raw: true,
+        });
+
+        const startOfDayUnixTimestamp = getStartOfDayUnixTimestamp();
+        const endOfDayUnixTimestamp = getEndOfDayUnixTimestamp();
+
+        const todayAttendance = attendanceData.filter((attendance) => {
+          const attendanceTimestamp = parseInt(attendance.date);
+          return attendanceTimestamp >= startOfDayUnixTimestamp && attendanceTimestamp <= endOfDayUnixTimestamp;
+        });
+
+        console.log("today attendance", todayAttendance);
+        const hasAttended = todayAttendance[todayAttendance.length - 1]?.status?.length > 0;
+
+        return {
+          id: result.pk_lesson_schedule,
+          lessonName: result["subject.subject_name"],
+          lessonTime: `${formater.convertIndexToDayName(
+            result.lesson_schedule_days
+          )}, ${startTimeFormatted} - ${endTimeFormatted}`,
+          lessonDurationMinutes: lessonDurationMinutes,
+          lessonId: result.pk_lesson_schedule,
+          class: result["class.class_name"],
+          classId: result["class.pk_class"],
+          teacherName: result["teacher.name"],
+          teacherId: result["teacher.pk_teacher"],
+          teacherAttended: hasAttended,
+          isAlreadyLoggedIn: isAlreadyLoggedIn,
+        };
+      })
+    );
+
+    // const transformedResults = results.map(result => ({
+    //     lessonName: result['subject.subject_name'],
+    //     lessonTime: result.lesson_schedule,
+    //     lessonId: result.pk_lesson_schedule,
+    //     class: result['class.class_name'],
+    //     classId: result['class.pk_class'],
+    //     teacherName: result['teacher.name'],
+    //     teacherId: result['teacher.pk_teacher']
+    // }));
+    response.success(transformedResults, res);
+  } catch (error) {
+    console.log(error);
+    return response.internalServerError(error, res);
+  }
 };

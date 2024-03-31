@@ -69,10 +69,7 @@ exports.newStudentsImport = async (req, res) => {
         where: { nis: studentData.nis },
       });
       if (existingStudent) {
-        return response.errorParams(
-          `Siswa dengan NIS "${studentData.nis}" sudah ada`,
-          res
-        );
+        return response.errorParams(`Siswa dengan NIS "${studentData.nis}" sudah ada`, res);
       }
 
       const className = studentData.kelas;
@@ -81,10 +78,7 @@ exports.newStudentsImport = async (req, res) => {
       });
 
       if (!foundClass) {
-        return response.errorParams(
-          `Kelas dengan nama yang sejalan dengan "${className}" tidak ditemukan`,
-          res
-        );
+        return response.errorParams(`Kelas dengan nama yang sejalan dengan "${className}" tidak ditemukan`, res);
       }
 
       await student.create({
@@ -154,11 +148,7 @@ exports.editStudent = async (req, res) => {
       updated_date: Date.now(),
     });
 
-    response.successWithCustomMsg(
-      `Berhasil mengedit siswa`,
-      existingStudent,
-      res
-    );
+    response.successWithCustomMsg(`Berhasil mengedit siswa`, existingStudent, res);
   } catch (error) {
     response.internalServerError(error, res);
   }
@@ -259,15 +249,18 @@ exports.getStudentByClassId = async (req, res) => {
 
         const todayAttendance = studentAttendance.filter((attendance) => {
           const attendanceTimestamp = parseInt(attendance.date);
-          return (
-            attendanceTimestamp >= startOfDayUnixTimestamp &&
-            attendanceTimestamp <= endOfDayUnixTimestamp
-          );
+          return attendanceTimestamp >= startOfDayUnixTimestamp && attendanceTimestamp <= endOfDayUnixTimestamp;
         });
 
         let hasAttended = false;
+        let status = "";
+        let description = "";
         if (todayAttendance[todayAttendance.length - 1]?.status?.length > 0) {
+          const todayData = todayAttendance[todayAttendance.length - 1];
+
           hasAttended = true;
+          status = todayData.status;
+          description = todayData.description;
         }
 
         return {
@@ -278,6 +271,8 @@ exports.getStudentByClassId = async (req, res) => {
           kelas: result["class.class_name"],
           idKelas: result.fk_class,
           hasAttended: hasAttended,
+          status: status,
+          description: description,
         };
       })
     );

@@ -3,6 +3,8 @@ const response = require("../response");
 const { attendance, student, teacher, lesson_schedule } = require("../models");
 const { formater } = require("../config/formatter");
 
+exports.teacherAttendance = async (req, res) => {};
+
 exports.createAttendance = async (req, res) => {
   const schema = Joi.object({
     user_role: Joi.string().valid("student", "teacher").required().messages({
@@ -22,13 +24,11 @@ exports.createAttendance = async (req, res) => {
     fk_lesson: Joi.number().required().messages({
       "any.required": `"fk_lesson" tidak boleh dikosongi`,
     }),
-    status: Joi.string()
-      .valid("present", "absent", "permit")
-      .required()
-      .messages({
-        "any.required": `"status" tidak boleh dikosongi`,
-        "any.only": `"status" harus berisi 'present' atau 'absent'`,
-      }),
+    status: Joi.string().valid("present", "absent", "permit").required().messages({
+      "any.required": `"status" tidak boleh dikosongi`,
+      "any.only": `"status" harus berisi 'present' atau 'absent'`,
+    }),
+    description: Joi.string().optional().allow(""),
     created_by: Joi.number(),
     updated_by: Joi.number(),
   });
@@ -36,7 +36,7 @@ exports.createAttendance = async (req, res) => {
   const { error } = schema.validate(req.body);
   if (error) return response.errorParams(error.message, res);
 
-  const { user_role, fk_student, fk_teacher, fk_lesson, status } = req.body;
+  const { user_role, fk_student, fk_teacher, fk_lesson, status, description } = req.body;
 
   try {
     const lessonSchedule = await lesson_schedule.findByPk(fk_lesson);
@@ -56,6 +56,7 @@ exports.createAttendance = async (req, res) => {
       fk_lesson: fk_lesson,
       date: Date.now(),
       status: status,
+      description: description ?? "",
       created_date: Date.now(),
       updated_date: Date.now(),
     };
@@ -68,11 +69,7 @@ exports.createAttendance = async (req, res) => {
       newAttendance = await attendance.create(attendanceData, { raw: true });
     }
 
-    return response.successWithCustomMsg(
-      `Berhasil membuat kehadiran`,
-      newAttendance,
-      res
-    );
+    return response.successWithCustomMsg(`Berhasil membuat kehadiran`, newAttendance, res);
 
     // if (currentDay !== lessonScheduleDay) {
     //   return response.errorParams("Hari ini bukan hari jadwal pelajaran", res);
